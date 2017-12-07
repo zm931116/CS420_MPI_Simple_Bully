@@ -8,7 +8,7 @@ double TX_PROB = 1.0 - ERROR_PROB;		// probability of transmitting a packet succ
 unsigned long int get_PRNG_seed()
 {
 	struct timeval tv;
-	gettimeofday(&tv,NULL);
+	gettimeofday(&tv, NULL);
 	unsigned long time_in_micros = 1000000 * tv.tv_sec + tv.tv_usec + getpid();//find the microseconds for seeding srand()
 
 	return time_in_micros;
@@ -16,7 +16,15 @@ unsigned long int get_PRNG_seed()
 
 bool is_timeout(time_t start_time)
 {
-	// YOUR CODE GOES HERE
+	struct timeval tv;
+	if (start_time > tv.tv_sec + 3)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 
@@ -82,10 +90,10 @@ int main(int argc, char *argv[])
 
 	int rounds = *argv[2];
 	int probability = *argv[3];
-	int token;
 	int hello = HELLO_MSG;
-	int election = LEADER_ELECTION_MSG;
 	int *receive_array[2];
+	int token;
+
 	MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
     
 	printf("\n*******************************************************************");
@@ -104,7 +112,12 @@ int main(int argc, char *argv[])
         	{
 				// then send a leader election message to next node on ring, after
 				// generating a random token number. Largest token among all nodes will win.
-				if (mpi_error = (MPI_Send(&election,
+				token = rand() / MAX_TOKEN_VALUE;
+				int election[2];
+				election[0] = rank;
+				election[1] = token;
+
+				if (mpi_error = (MPI_Send(election,
 										  1,
 										  MPI_INT,
 										  successor,
@@ -142,7 +155,7 @@ int main(int argc, char *argv[])
 									   2,
 									   MPI_INT,
 									   MPI_ANY_SOURCE,
-									   LEADER_ELECTION_MSG_TAG,
+									   MPI_ANY_TAG,
 									   comm,
 									   request)) != MPI_SUCCESS)
 			{
@@ -151,32 +164,47 @@ int main(int argc, char *argv[])
 			
 			// If time out happens, then we shall remove the pending MPI_IRecv() [for demonstrating MPI_Test(), MPI_Cancel() and MPI_Request_free()]
 			// Otherwise, we receive the message and decide appropriate action based on the message TAG
-			if ( )
-			{
-				printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			int flag = 0;
 
-				printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
-				fflush(stdout);
-			}
-			
-			if ( )
+			while (true)
 			{
-				// If HELLO MSG received, do nothing
-				// If LEADER ELECTION message, then determine who is the new leader and send out a new leader notification message
-				switch (status->MPI_TAG) 
+				if (is_timeout(tv.tv_sec))
 				{
-					case HELLO_MSG_TAG:
-						printf("\n[rank %d][%d] HELLO MESSAGE completed ring traversal!\n", rank, round);
-						fflush(stdout);
+					printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
+
+					printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
+					fflush(stdout);
+					break;
+				}
+				else
+				{
+					if (MPI_Iprobe(predecessor, MPI_ANY_TAG, comm, &flag, status) == true)
+					{
+						// If HELLO MSG received, do nothing
+						// If LEADER ELECTION message, then determine who is the new leader and send out a new leader notification message
+						switch (status->MPI_TAG) 
+						{
+							case HELLO_MSG_TAG:
+								printf("\n[rank %d][%d] HELLO MESSAGE completed ring traversal!\n", rank, round);
+								fflush(stdout);
+								break;
+							case LEADER_ELECTION_MSG_TAG:
+								// Send a new leader message
+								printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, *receive_array[1]);
+								fflush(stdout);
+								break;
+							default: ;	// do nothing
+						}
+
 						break;
-					case LEADER_ELECTION_MSG_TAG:
-						// Send a new leader message
-						printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, *receive_array[1]);
-						fflush(stdout);
-						break;
-					default: ;	// do nothing
+					}
 				}
 			}
+				
+
+			MPI_Barrier(comm);
 		}
 		else
 		{
