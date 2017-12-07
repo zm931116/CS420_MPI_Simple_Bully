@@ -72,8 +72,8 @@ int main(int argc, char *argv[])
 	// argv[2]: how many rounds to run the algorithm
 	// argv[3]: packet trasnmission success/failure probability
 	int current_leader = *argv[1];
-	int successor = (current_leader + 1) % 5;
-	int predecessor = current_leader - 1;
+	int successor = (rank + 1) % 5;
+	int predecessor = rank - 1;
 
 	if (predecessor < 0)
 	{
@@ -83,6 +83,10 @@ int main(int argc, char *argv[])
 	int rounds = *argv[2];
 	int probability = *argv[3];
 	int token;
+	int hello = HELLO_MSG;
+	int election = LEADER_ELECTION_MSG;
+	int *receive_array[2];
+	MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
     
 	printf("\n*******************************************************************");
 	printf("\n*******************************************************************");
@@ -100,6 +104,15 @@ int main(int argc, char *argv[])
         	{
 				// then send a leader election message to next node on ring, after
 				// generating a random token number. Largest token among all nodes will win.
+				if (mpi_error = (MPI_Send(&election,
+										  1,
+										  MPI_INT,
+										  successor,
+										  LEADER_ELECTION_MSG_TAG,
+										  comm)) != MPI_SUCCESS)
+				{
+					graceful_exit(rank, mpi_error);
+				}				
 				
 				printf("\n[rank %d][%d] SENT LEADER ELECTION MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, successor, token, LEADER_ELECTION_MSG_TAG);
 				fflush(stdout);
@@ -107,14 +120,34 @@ int main(int argc, char *argv[])
 			else
 			{
 				// Otherwise, send a periodic HELLO message around the ring
-			
+				if (mpi_error = (MPI_Send(&hello, 
+										  1,
+										  MPI_INT,
+										  successor,
+										  HELLO_MSG_TAG,
+										  comm) != MPI_SUCCESS))
+				{
+					graceful_exit(rank, mpi_error);
+				}
+
 				printf("\n[rank %d][%d] SENT HELLO MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, successor, token, HELLO_MSG_TAG);
 				fflush(stdout);
 			}
 		
 			// Now issue a speculative MPI_IRecv() to receive data back
-			int recv_buf[2];
+			int *receive_array[2];
+			MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
 
+			if (mpi_error = (MPI_Irecv(receive_array,
+									   2,
+									   MPI_INT,
+									   MPI_ANY_SOURCE,
+									   LEADER_ELECTION_MSG_TAG,
+									   comm,
+									   request)) != MPI_SUCCESS)
+			{
+				graceful_exit(rank, mpi_error);
+			}
 			
 			// If time out happens, then we shall remove the pending MPI_IRecv() [for demonstrating MPI_Test(), MPI_Cancel() and MPI_Request_free()]
 			// Otherwise, we receive the message and decide appropriate action based on the message TAG
@@ -138,7 +171,7 @@ int main(int argc, char *argv[])
 						break;
 					case LEADER_ELECTION_MSG_TAG:
 						// Send a new leader message
-						printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, recv_buf[1]);
+						printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, *receive_array[1]);
 						fflush(stdout);
 						break;
 					default: ;	// do nothing
@@ -186,7 +219,7 @@ int main(int argc, char *argv[])
 					// Forward the LEADER ELECTION Message
 
 					// Finally, wait to hear from current leader who will be the next leader
-					printf("\n\t[rank %d][%d] NEW LEADER :: node %d with TOKEN = %d\n", rank, round, current_leader, recv_buf[1]);
+					printf("\n\t[rank %d][%d] NEW LEADER :: node %d with TOKEN = %d\n", rank, round, current_leader, *receive_array[1]);
 					fflush(stdout);
 					
 					// Forward the LEADER ELECTION RESULT MESSAGE
