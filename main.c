@@ -2,7 +2,7 @@
 #include "simplebully.h"
 
 
-int MAX_ROUNDS = 1;						// number of rounds to run the algorithm
+int MAX_ROUNDS = 10;						// number of rounds to run the algorithm
 double TX_PROB = 1.0 - ERROR_PROB;		// probability of transmitting a packet successfully
 
 
@@ -75,11 +75,16 @@ int main(int argc, char *argv[])
 		graceful_exit(rank, mpi_error);
 	}
 
-	if (*argv[1] > size || *argv[1] < 0)
+	int arg_one = atoi(argv[1]);
+	int arg_two = atoi(argv[2]);
+	int arg_three = atoi(argv[3]);
+
+	if (arg_one > size || arg_one < 0)
 	{
 		printf("Error, initial leader is greater or less than worker count!\n");
 		graceful_exit(rank, mpi_error);
-	}	
+	}
+	printf("Checked args\n");
 
 	srand(get_PRNG_seed());
 
@@ -88,7 +93,7 @@ int main(int argc, char *argv[])
 	// argv[1]: designated initial leader
 	// argv[2]: how many rounds to run the algorithm
 	// argv[3]: packet trasnmission success/failure probability
-	int current_leader = *argv[1];
+	int current_leader = arg_one;
 	int successor = (rank + 1) % 5;
 	int predecessor = rank - 1;
 
@@ -97,11 +102,11 @@ int main(int argc, char *argv[])
 		predecessor = (size - 1);
 	}
 
-	int rounds = *argv[2];
+	int rounds = arg_two;
 
 	int probability;
 	if (argc == 4)
-		probability = *argv[3];
+		probability = arg_three;
 	else
 		probability = TX_PROB;
 
