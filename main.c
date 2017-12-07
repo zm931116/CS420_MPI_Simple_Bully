@@ -18,7 +18,7 @@ unsigned long int get_PRNG_seed()
 bool is_timeout(time_t start_time)
 {
 	struct timeval tv;
-	if (start_time > tv.tv_sec + 3)
+	if (start_time + 3 < tv.tv_sec)
 	{
 		return true;
 	}
@@ -84,7 +84,6 @@ int main(int argc, char *argv[])
 		printf("Error, initial leader is greater or less than worker count!\n");
 		graceful_exit(rank, mpi_error);
 	}
-	printf("Checked args\n");
 
 	srand(get_PRNG_seed());
 
@@ -213,19 +212,47 @@ int main(int argc, char *argv[])
 								break;
 							case LEADER_ELECTION_MSG_TAG:
 								// Send a new leader message
-								// TODO: Send leader election results
+								// TODO: Who is the new leader? then broadcast
+
+								current_leader = *receive_array[0];
+
+								for (int i = 0; i < size; i++)
+								{
+									if (mpi_error = (MPI_Send(receive_array,
+														      2,
+														  	  MPI_INT,
+														  	  i,
+														  	  LEADER_ELECTION_MSG_TAG,
+														  	  comm)) != MPI_SUCCESS)
+								{
+									graceful_exit(rank, mpi_error);
+								}
+
+								if (mpi_error = (MPI_Irecv(receive_array,
+														   2,
+														   MPI_INT,
+														   rank,
+														   LEADER_ELECTION_MSG_TAG,
+														   comm,
+														   request)) != MPI_SUCCESS)
+								{
+									graceful_exit(rank, mpi_error);
+								}
 
 								printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, *receive_array[1]);
 								fflush(stdout);
+								
 								break;
+								}
+								
 							default: ;	// do nothing
+									
 						}
 
 						break;
 					}
 				}
-			}
-				
+			}		
 
 			MPI_Barrier(comm);
 		}
@@ -311,7 +338,19 @@ int main(int argc, char *argv[])
 									graceful_exit(rank, mpi_error);
 								}			
 
-								// TODO: Finally, wait to hear from current leader who will be the next leader
+								// Finally, wait to hear from current leader who will be the next leader
+								MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
+								if (mpi_error = (MPI_Irecv(receive_array, 
+														   2,
+														   MPI_INT,
+														   MPI_ANY_SOURCE,
+														   MPI_ANY_TAG,
+														   comm,
+														   request)) != MPI_SUCCESS)
+								{
+									graceful_exit(rank, mpi_error);
+								}
+
 								printf("\n\t[rank %d][%d] NEW LEADER :: node %d with TOKEN = %d\n", rank, round, current_leader, *receive_array[1]);
 								fflush(stdout);
 								
@@ -322,6 +361,8 @@ int main(int argc, char *argv[])
 
 						break;
 					}
+
+					MPI_Barrier(comm);
 				}
 			}
 	
