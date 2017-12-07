@@ -2,7 +2,7 @@
 #include "simplebully.h"
 
 
-int MAX_ROUNDS = 10;						// number of rounds to run the algorithm
+int MAX_ROUNDS = 10;					// number of rounds to run the algorithm
 double TX_PROB = 1.0 - ERROR_PROB;		// probability of transmitting a packet successfully
 
 
@@ -13,21 +13,7 @@ unsigned long int get_PRNG_seed()
 	unsigned long time_in_micros = 1000000 * tv.tv_sec + tv.tv_usec + getpid();//find the microseconds for seeding srand()
 
 	return time_in_micros;
-}        
-
-bool is_timeout(time_t start_time)
-{
-	struct timeval tv;
-	if (start_time + 3 < tv.tv_sec)
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
 }
-
 
 bool try_leader_elect()
 {
@@ -183,13 +169,15 @@ int main(int argc, char *argv[])
 			
 			// If time out happens, then we shall remove the pending MPI_IRecv() [for demonstrating MPI_Test(), MPI_Cancel() and MPI_Request_free()]
 			// Otherwise, we receive the message and decide appropriate action based on the message TAG
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
 			int flag = 0;
+			bool terminate = false;
+			time_t start, end;
+			double elapsed;
+			start = time(NULL);
 
 			while (true)
 			{
-				if (is_timeout(tv.tv_sec))
+				if (terminate)
 				{
 					printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
 
@@ -241,7 +229,7 @@ int main(int argc, char *argv[])
 
 								printf("\n[rank %d][%d] NEW LEADER FOUND! new leader = %d, with token = %d\n", rank, round, current_leader, *receive_array[1]);
 								fflush(stdout);
-								
+
 								break;
 								}
 								
@@ -252,19 +240,26 @@ int main(int argc, char *argv[])
 						break;
 					}
 				}
+
+				end = time(NULL);
+				elapsed = difftime(end, start);
+				if (elapsed >= 3)
+					terminate = true;
 			}		
 
 			MPI_Barrier(comm);
 		}
 		else
 		{
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
+			bool terminate = false;
+			time_t start, end;
+			double elapsed;
+			start = time(NULL);
 			int flag = 0;
 
 			while (true)
 			{
-				if (is_timeout(tv.tv_sec))
+				if (terminate)
 				{
 					printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
 
@@ -355,6 +350,18 @@ int main(int argc, char *argv[])
 								fflush(stdout);
 								
 								// Forward the LEADER ELECTION RESULT MESSAGE
+								election[0] = *receive_array[0];
+								election[1] = *receive_array[1];
+
+								if (mpi_error = (MPI_Send(election,
+										 				  1,
+														  MPI_INT,
+														  successor,
+														  LEADER_ELECTION_MSG_TAG,
+														  comm)) != MPI_SUCCESS)
+								{
+									graceful_exit(rank, mpi_error);
+								}
 								break;
 							default: ;	// do nothing
 						}
@@ -364,6 +371,11 @@ int main(int argc, char *argv[])
 
 					MPI_Barrier(comm);
 				}
+
+				end = time(NULL);
+				elapsed = difftime(end, start);
+				if (elapsed >= 3)
+					terminate = true;
 			}
 	
 		}
