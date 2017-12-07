@@ -251,6 +251,20 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
+			int *receive_array[2];
+			MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
+
+			if (mpi_error = (MPI_Irecv(receive_array,
+									   2,
+									   MPI_INT,
+									   MPI_ANY_SOURCE,
+									   MPI_ANY_TAG,
+									   comm,
+									   request)) != MPI_SUCCESS)
+			{
+				graceful_exit(rank, mpi_error);
+			}
+			
 			bool terminate = false;
 			time_t start, end;
 			double elapsed;
@@ -261,7 +275,7 @@ int main(int argc, char *argv[])
 			{
 				if (terminate)
 				{
-					printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
+					printf("\n[rank %d][%d] TIME OUT waiting for initial message!\n", rank, round);
 
 					printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
 					fflush(stdout);
@@ -273,6 +287,8 @@ int main(int argc, char *argv[])
 					{
 						// If HELLO MSG received, do nothing
 						// If LEADER ELECTION message, then determine who is the new leader and send out a new leader notification message
+						printf("status flag = %d\n", status->MPI_TAG);
+
 						switch (status->MPI_TAG) 
 						{
 							case HELLO_MSG_TAG:
