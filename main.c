@@ -2,8 +2,6 @@
 #include "simplebully.h"
 
 
-MPI_Comm comm = MPI_COMM_WORLD;
-
 int MAX_ROUNDS = 1;						// number of rounds to run the algorithm
 double TX_PROB = 1.0 - ERROR_PROB;		// probability of transmitting a packet successfully
 
@@ -34,7 +32,7 @@ bool try_leader_elect()
 
 void graceful_exit(int rank, int error)
 {
-    char error_string[ERR_BUF_SIZE];
+    char error_string[50];
     int err_str_len;
 
     MPI_Error_string(error, error_string, &err_str_len);
@@ -46,10 +44,9 @@ void graceful_exit(int rank, int error)
 
 int main(int argc, char *argv[])
 {
-	int rank
+	int rank;
 	int size;
-	mpi_error;
-	
+	int mpi_error;
 	
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(comm, &size);
@@ -58,21 +55,23 @@ int main(int argc, char *argv[])
 	if (size < 4)
 	{
 		printf("Error, won't work without at least four workers!\n");
-		graceful_exit(rank, mpi_error;)
+		graceful_exit(rank, mpi_error);
 	}
 
-	if (argv[1] > size || argv[1] < 0)
+	if (*argv[1] > size || *argv[1] < 0)
 	{
 		printf("Error, initial leader is greater or less than worker count!\n");
 		graceful_exit(rank, mpi_error);
 	}	
 
 	srand(get_PRNG_seed());
+
+	MPI_Status *status = (MPI_Status *) malloc((size - 1) * sizeof(MPI_Status));
     	
 	// argv[1]: designated initial leader
 	// argv[2]: how many rounds to run the algorithm
 	// argv[3]: packet trasnmission success/failure probability
-	int current_leader = argv[1];
+	int current_leader = *argv[1];
 	int successor = (current_leader + 1) % 5;
 	int predecessor = current_leader - 1;
 
@@ -81,8 +80,8 @@ int main(int argc, char *argv[])
 		predecessor = (size - 1);
 	}
 
-	int rounds = argv[2];
-	int probability = argv[3];
+	int rounds = *argv[2];
+	int probability = *argv[3];
 	int token;
     
 	printf("\n*******************************************************************");
@@ -102,14 +101,14 @@ int main(int argc, char *argv[])
 				// then send a leader election message to next node on ring, after
 				// generating a random token number. Largest token among all nodes will win.
 				
-				printf("\n[rank %d][%d] SENT LEADER ELECTION MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, succ, mytoken, LEADER_ELECTION_MSG_TAG);
+				printf("\n[rank %d][%d] SENT LEADER ELECTION MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, successor, token, LEADER_ELECTION_MSG_TAG);
 				fflush(stdout);
 			} 
 			else
 			{
 				// Otherwise, send a periodic HELLO message around the ring
 			
-				printf("\n[rank %d][%d] SENT HELLO MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, succ, mytoken, HELLO_MSG_TAG);
+				printf("\n[rank %d][%d] SENT HELLO MSG to node %d with TOKEN = %d, tag = %d\n", rank, round, successor, token, HELLO_MSG_TAG);
 				fflush(stdout);
 			}
 		
@@ -131,7 +130,7 @@ int main(int argc, char *argv[])
 			{
 				// If HELLO MSG received, do nothing
 				// If LEADER ELECTION message, then determine who is the new leader and send out a new leader notification message
-				switch (status.MPI_TAG) 
+				switch (status->MPI_TAG) 
 				{
 					case HELLO_MSG_TAG:
 						printf("\n[rank %d][%d] HELLO MESSAGE completed ring traversal!\n", rank, round);
@@ -152,22 +151,22 @@ int main(int argc, char *argv[])
 			{
 				// You want to first receive the message so as to remove it from the MPI Buffer	
 
-				if (status.MPI_TAG == HELLO_MSG_TAG)
+				if (status->MPI_TAG == HELLO_MSG_TAG)
 				{
 					// With a probability 'p', forward the message to next node
 					// This simulates link or node failure in a distributed system
 					if ( ) 
 					{
-						printf("\n\t[rank %d][%d] Received and Forwarded HELLO MSG to next node = %d\n", rank, round, succ);
+						printf("\n\t[rank %d][%d] Received and Forwarded HELLO MSG to next node = %d\n", rank, round, successor);
 						fflush(stdout);
 					}
 					else
 					{
-						printf("\n\t[rank %d][%d] WILL NOT FORWARD HELLO MSG to next node = %d\n", rank, round, succ);
+						printf("\n\t[rank %d][%d] WILL NOT FORWARD HELLO MSG to next node = %d\n", rank, round, successor);
 						fflush(stdout);
 					}
 				} 
-				else if (status.MPI_TAG == LEADER_ELECTION_MSG_TAG)
+				else if (status->MPI_TAG == LEADER_ELECTION_MSG_TAG)
 				{
 					// Fist probabilistically see if wants to become a leader.
 					// If yes, then generate own token and test if can become leader.
@@ -175,7 +174,7 @@ int main(int argc, char *argv[])
 					// Otherwise, just forward the original received LEADER ELECTION Message
 					if ( )
 					{
-						printf("\n\t[rank %d][%d] My new TOKEN = %d\n", rank, round, mytoken);
+						printf("\n\t[rank %d][%d] My new TOKEN = %d\n", rank, round, token);
 						fflush(stdout);
 					}
 					else
