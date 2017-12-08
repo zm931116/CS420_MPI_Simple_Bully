@@ -6,6 +6,8 @@
 int MAX_ROUNDS = 3;
 double TX_PROB = 1.0 - ERROR_PROB;
 
+
+
 unsigned long int get_PRNG_seed()
 {
 	struct timeval tv;
@@ -84,7 +86,7 @@ int main(int argc, char *argv[])
         successor = rank + 1;
     }
 
-    printf("\n*******************************************************************");
+    printf("\n*******************************************************************"); 
 	printf("\n*******************************************************************");
 	printf("\n Initialization parameters:: \n\tMAX_ROUNDS = %d \n\tinitial leader = %d \n\tTX_PROB = %d\n", MAX_ROUNDS, current_leader, TX_PROB);
 	printf("\n*******************************************************************");
@@ -181,6 +183,7 @@ int main(int argc, char *argv[])
                     case HELLO_MSG_TAG:
                     {
                         printf("\n[rank %d][%d] HELLO MESSAGE completed ring traversal!\n", rank, round);
+
                         break;
                     }
                     case LEADER_ELECTION_MSG_TAG:
@@ -335,7 +338,7 @@ int main(int argc, char *argv[])
                                                   2,
                                                   MPI_INT,
                                                   predecessor,
-                                                  LEADER_ELECTION_MSG_TAG,
+                                                  LEADER_ELECTION_RESULT_MSG_TAG,
                                                   comm,
                                                   &status)) != MPI_SUCCESS)
                         {
@@ -350,7 +353,7 @@ int main(int argc, char *argv[])
                                                   2,
                                                   MPI_INT,
                                                   successor,
-                                                  LEADER_ELECTION_MSG_TAG,
+                                                  LEADER_ELECTION_RESULT_MSG_TAG,
                                                   comm)) != MPI_SUCCESS)
                         {
                             graceful_exit(rank, mpi_error);
