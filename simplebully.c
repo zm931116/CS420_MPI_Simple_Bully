@@ -56,6 +56,10 @@ int main(int argc, char *argv[])
     MPI_Comm_size(comm, &size);
     MPI_Comm_rank(comm, &rank);
     printf("\nNo. of procs = %d, proc ID = %d initialized...\n", size, rank);
+    
+    current_leader = atoi(argv[1]);
+	int MAX_ROUNDS = atoi(argv[2]);
+    int TX_PROB = atoi(argv[3]);
 
     MPI_Status status;
 
@@ -82,7 +86,7 @@ int main(int argc, char *argv[])
 
     printf("\n*******************************************************************");
 	printf("\n*******************************************************************");
-	printf("\n Initialization parameters:: \n\tMAX_ROUNDS = %d \n\tinitial leader = %d \n\tTX_PROB = %f\n", MAX_ROUNDS, current_leader, TX_PROB);
+	printf("\n Initialization parameters:: \n\tMAX_ROUNDS = %d \n\tinitial leader = %d \n\tTX_PROB = %d\n", MAX_ROUNDS, current_leader, TX_PROB);
 	printf("\n*******************************************************************");
 	printf("\n*******************************************************************\n\n");
 
@@ -215,9 +219,150 @@ int main(int argc, char *argv[])
         }
         else
         {
+            bool terminate = false;
+            int flag = 0;
+            time_t start;
+            time_t end;
+            double elapsed;
+            start = time(NULL);
 
+            while (!flag && !terminate)
+            {
+                if (terminate)
+                {
+                    printf("n[rank %d][%d] Leader didn't hear back!\n", rank, round);
+					printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
+                
+                    break;
+                }
+                else
+                {
+                    MPI_Iprobe(predecessor,
+                               MPI_ANY_TAG,
+                               comm,
+                               &flag,
+                               &status);
+                }
+
+                end = time(NULL);
+				elapsed = difftime(end, start);
+				if (elapsed >= 3)
+                {
+					terminate = true;
+                }
+            }
+
+            if (!terminate)
+            {
+                switch (status.MPI_TAG)
+                {
+                    case HELLO_MSG_TAG:
+                    {
+                        if (mpi_error = (MPI_Recv(&recieve_buf[0],
+                                                   1,
+                                                   MPI_INT,
+                                                   predecessor,
+                                                   HELLO_MSG_TAG,
+                                                   comm,
+                                                   &status)) != MPI_SUCCESS)
+                        {
+                            graceful_exit(rank, mpi_error);
+                        }
+
+                        if (get_prob() < TX_PROB)
+                        {
+                            printf("\n\t[rank %d][%d] Received and Forwarded HELLO MSG to next node = %d\n", rank, round, successor);
+
+                            if (mpi_error = (MPI_Send(&hello,
+                                                      1,
+                                                      MPI_INT,
+                                                      successor,
+                                                      HELLO_MSG_TAG,
+                                                      comm)) != MPI_SUCCESS)
+                            {
+                                graceful_exit(rank, mpi_error);
+                            }
+                        }
+                        else
+                        {
+                            printf("\n\t[rank %d][%d] WILL NOT FORWARD HELLO MSG to next node = %d\n", rank, round, successor);
+                        }
+
+                        break;
+                    }
+
+                    case LEADER_ELECTION_MSG_TAG:
+                    {
+                        if (mpi_error = (MPI_Recv(recieve_buf,
+                                                  2,
+                                                  MPI_INT,
+                                                  predecessor,
+                                                  LEADER_ELECTION_MSG_TAG,
+                                                  comm,
+                                                  &status)) != MPI_SUCCESS)
+                        {
+                            graceful_exit(rank, mpi_error);
+                        }
+
+                        if (try_leader_elect())
+                        {
+                            token = generate_token();
+
+                            printf("\n\t[rank %d][%d] My new TOKEN = %d\n", rank, round, token);
+                        
+                            if (token > recieve_buf[1])
+                            {
+                                recieve_buf[0] = rank;
+                                recieve_buf[1] = token;
+                            }
+                        }
+                        else
+                        {
+                            printf("\n\t[rank %d][%d] Will not participate in Leader Election.\n", rank, round);
+                        }
+
+                        if (mpi_error = (MPI_Send(recieve_buf,
+                                                  2,
+                                                  MPI_INT,
+                                                  successor,
+                                                  LEADER_ELECTION_MSG_TAG,
+                                                  comm)) != MPI_SUCCESS)
+                        {
+                            graceful_exit(rank, mpi_error);
+                        }
+
+                        if (mpi_error = (MPI_Recv(recieve_buf,
+                                                  2,
+                                                  MPI_INT,
+                                                  predecessor,
+                                                  LEADER_ELECTION_MSG_TAG,
+                                                  comm,
+                                                  &status)) != MPI_SUCCESS)
+                        {
+                            graceful_exit(rank, mpi_error);
+                        }
+
+                        current_leader = recieve_buf[0];
+
+                        printf("\n\t[rank %d][%d] NEW LEADER :: node %d with TOKEN = %d\n", rank, round, current_leader, recieve_buf[1]);
+                    
+                        if (mpi_error = (MPI_Send(recieve_buf,
+                                                  2,
+                                                  MPI_INT,
+                                                  successor,
+                                                  LEADER_ELECTION_MSG_TAG,
+                                                  comm)) != MPI_SUCCESS)
+                        {
+                            graceful_exit(rank, mpi_error);
+                        }
+                    }
+                }
+            }
         }
+    
+    MPI_Barrier(comm);
     }
+    printf("\n** Leader for NODE %d = %d\n", rank, current_leader);
 
     MPI_Finalize();
 
