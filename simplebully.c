@@ -6,8 +6,6 @@
 int MAX_ROUNDS = 3;
 double TX_PROB = 1.0 - ERROR_PROB;
 
-
-
 unsigned long int get_PRNG_seed()
 {
 	struct timeval tv;
@@ -363,7 +361,7 @@ int main(int argc, char *argv[])
             }
         }
     
-    MPI_Barrier(comm);
+        MPI_Barrier(comm);
     }
     printf("\n** Leader for NODE %d = %d\n", rank, current_leader);
 
