@@ -99,7 +99,8 @@ int main(int argc, char *argv[])
 	int *receive_array[2];
 	int token;
 
-	MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
+	int *receive_array[2];
+	MPI_Request *request = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
     
 	printf("\n*******************************************************************");
 	printf("\n*******************************************************************");
@@ -153,9 +154,6 @@ int main(int argc, char *argv[])
 			}
 		
 			// Now issue a speculative MPI_IRecv() to receive data back
-			int *receive_array[2];
-			MPI_Request *request = (MPI_Request *) malloc((size - 1) * sizeof(MPI_Request));
-
 			if (mpi_error = (MPI_Irecv(receive_array,
 									   2,
 									   MPI_INT,
@@ -179,8 +177,9 @@ int main(int argc, char *argv[])
 			{
 				if (terminate)
 				{
-					printf("\n[rank %d][%d] TIME OUT on HELLO MESSAGE! Cancelling speculative MPI_IRecv() issued earlier\n", rank, round);
+					MPI_Cancel(request);
 
+					printf("n[rank %d][%d] Leader didn't hear back!\n", rank, round);
 					printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
 					fflush(stdout);
 					break;
@@ -275,8 +274,9 @@ int main(int argc, char *argv[])
 			{
 				if (terminate)
 				{
-					printf("\n[rank %d][%d] TIME OUT waiting for initial message!\n", rank, round);
+					MPI_Cancel(request);
 
+					printf("\n[rank %d][%d] TIME OUT waiting for initial message!\n", rank, round);
 					printf("\n[rank %d][%d] Cancelled speculative MPI_IRecv() issued earlier\n", rank, round);
 					fflush(stdout);
 					break;
